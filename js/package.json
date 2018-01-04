@@ -1,0 +1,18 @@
+{
+  "name": "sf_show_map",
+  "version": "1.0.0",
+  "description": "",
+  "main": "mapper.js",
+  "dependencies": {
+    "eslint": "^4.14.0"
+  },
+  "devDependencies": {
+    "eslint-config-airbnb": "^16.0.0",
+    "eslint-plugin-import": "^2.8.0"
+  },
+  "scripts": {
+    "lint": "./node_modules/eslint/bin/eslint.js mapper.js"
+  },
+  "author": "Hexecute",
+  "license": "ISC"
+}

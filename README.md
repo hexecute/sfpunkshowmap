@@ -2,7 +2,7 @@
 
 This is an attempt to:
 
- - scrape [the list](http://www.foopee.com/punk/the-list/) for shows
+ - scrape 19hz.info for shows (with frajen's permissions)
  - put those shows on a map
 
 ## License

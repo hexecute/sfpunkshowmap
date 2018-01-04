@@ -1,155 +1,23 @@
 // globals
+// HX: Fix Alcatraz Island
+// HX: Fix single or double quotes
+// HX: Coding standards
+// HX: Restructuring
+let map;
+// HX: Rename
+let myLayer;
+let overlays;
+// HX: Restructure
+let filters;
+let selectedDatesList;
 
-var data;
-var map;
-var resp;
-var geojson;
-var organized;
-var myLayer;
-var overlays;
-var filters;
-var selectedDatesList;
-var geoResponse;
+/* CONSTANTS */
 
-// the scrape
-
-var urls = "'http://www.foopee.com/punk/the-list/by-date.0.html', 'http://www.foopee.com/punk/the-list/by-date.1.html'";
-var xpath = "//body/ul/li";
-var query = "select * from htmlstring where url in (" + urls + ") and xpath='" + xpath + "'";
-var yql_url = "https://query.yahooapis.com/v1/public/yql?format=json&q=" + encodeURIComponent(query) + "&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys";
-
-
-////////////
-// foopee /
-//////////
-
-function get(url) {
-
-    // Return a new promise.
-    return new Promise(function(resolve, reject) {
-
-        var req = new XMLHttpRequest();
-        req.open('GET', url);
-
-        req.onload = function() {
-            if (req.status == 200) {
-                resp = JSON.parse(req.response);
-                organized = sortByDate(resp);
-                resolve(console.log('Request success.'));;
-            } else {
-                reject(console.log(Error(req.statusText)));
-            }
-        };
-
-        // Handle network errors
-        req.onerror = function() {
-            reject(Error("Network Error"));
-        };
-
-        req.send();
-    });
-}
-
-
-////////////
-// MAPBOX /
-//////////
-
-// defaults
-function ModifiedClusterGroup() {
-    return new L.MarkerClusterGroup({
-        spiderfyOnMaxZoom: true,
-        maxClusterRadius: 1,
-        spiderfyDistanceMultiplier: 3
-            /* custom icons ?
-            iconCreateFunction: function(cluster) {
-              return L.mapbox.marker.icon({
-                // show the number of markers in the cluster on the icon.
-                'marker-symbol': cluster.getChildCount(),
-                'marker-color': '#a0d6b4'
-              });
-            }
-            */
-    });
-}
-
-
-function setupMap() {
-    // Return a new promise
-    return new Promise(function(resolve, reject) {
-
-        // easy to change online though if we suspect abuse
-        L.mapbox.accessToken = 'pk.eyJ1IjoibWV0YXN5biIsImEiOiIwN2FmMDNhNTRhOWQ3NDExODI1MTllMDk1ODc3NTllZiJ9.Bye80QJ4r0RJsKj4Sre6KQ';
-
-        // Init map
-        map = L.mapbox.map('map', 'mapbox.dark', {
-                maxZoom: 17
-            })
-            .setView([37.7600, -122.416], 13);
-
-        // Locate me button
-        L.control.locate().addTo(map);
-
-
-        if (map) {
-            resolve(console.log('Map is loaded.'));
-        } else {
-            reject(console.log(Error('Map not loaded!')));
-        }
-    });
-}
-
-// filters
-
-function populateDates(organized) {
-    // grab form
-    var form = document.getElementById('date-selector');
-    var dates = Object.keys(organized);
-
-    // lazy
-    form.innerHTML = '<div>'
-    for (var d = 0; d < dates.length; d++) {
-        var le_radio = "<input type='checkbox' name='filters' onclick='showShows();' value='" + dates[d] + "' checked> " + dates[d]
-        form.innerHTML = form.innerHTML + le_radio
-    }
-    form.innerHTML += '</div>'
-    filters = document.getElementById('date-selector').filters;
-}
-
-
-
-function showShows() {
-
-    selectedDatesList = [];
-    // first collect all of the checked boxes and create an array of strings
-    for (var i = 0; i < filters.length; i++) {
-        if (filters[i].checked) selectedDatesList.push(filters[i].value);
-    }
-    // then remove any previously-displayed marker groups
-    overlays.clearLayers();
-    // create a new marker group
-    var clusterGroup = ModifiedClusterGroup().addTo(overlays);
-    // and add any markers that fit the filtered criteria to that group.
-    myLayer.eachLayer(function(layer) {
-        if (selectedDatesList.indexOf(layer.feature.properties.date) !== -1) {
-            clusterGroup.addLayer(layer);
-        }
-    });
-
-    // update coordinates box
-    onmove();
-
-}
-
-
-
-////////////
-// VENUES /
-//////////
+const csvUrl = 'https://cors.io/?https://19hz.info/events_BayArea.csv';
 
 // Note: geojson requires lon-lat, not lat-lon.
-
-lonlatDictionary = {
+// Convert to load from a file
+const lonlatDictionary = {
     '924 Gilman Street, Berkeley': [-122.2993211, 37.8795371],
     'DNA Lounge, S.F.': [122.4126746, 37.7710559],
     'Eagle, S.F.': [122.4133666, 37.7700044],
@@ -229,209 +97,299 @@ lonlatDictionary = {
     'Shoreline Amphitheater, Mountain View': [-122.080765, 37.4268879],
     'Eli\'s Mile High Club, Oakland': [-122.269671, 37.825786],
     'Rite Spot, S.F.': [-122.4149695, 37.7638409],
-    
 };
 
-/////////////
-// helpers /
-///////////
-
-function parseHTMLToDOM(j){
-    var res = j['query']['results']['result'];
-    var results = res.join('\n');
-
-    // array of dates
-    p = new DOMParser();
-    results = p.parseFromString(results, 'text/html');
-    $results = $(results);
-
-    return $results;
-}
-
-function sortByDate(j) {
-
-    $results = parseHTMLToDOM(j);
-    console.log($results)
-
-    // grab the dates to use as keys
-    dates = $results.find('body > li > a').map(function() {
-        return $.trim(this.text);
-    }).get();
-
-    organized = {};
-
-    console.log(dates.length)
-
-    for (var i = 0; i < dates.length; i++) {
-
-        // empty date
-        organized[dates[i]] = [];
-
-        // Array is zero indexed but nth-child starts at 1
-        var index = i + 1
-        var $shows = $results.find('body > li:nth-child(' + index + ')').find('li');
-
-        for (var si = 0; si < $shows.length; si++) {
-
-            // god save us all, i'm so sorry
-            var things= $($shows[si]).find('a').map(function() {
-                return $.trim(this.text);
-            }).get();
-
-            // really, I am
-            var venue = things.shift();
-            var bands = things;
-            var deets = $.trim($shows[si].innerText.split('\n').slice(-3, -2));
-            
-            organized[dates[i]].push({
-                'venue': venue,
-                'date': dates[i],
-                'details': deets,
-                'bands': bands,
+/*
+ * Convert 19hz.info CSV into the format used by sfpunkshowmap
+ *
+ * @param   (list) arr: CSV in a list format
+ * @returns (dict): CSV in a format used by sfpunkshowmap with results
+ *                  as dicts organized in lists by dates
+ */
+function nineteenHzParse(arr) {
+    const rv = {};
+    for (const elem of arr) {
+        const date = elem[0].replace(':', '');
+        if (!date.length) {
+            console.log('Anomalous CSV data entry found:');
+            console.log(elem);
+        } else {
+            if (!(date in rv)) {
+                rv[date] = [];
+            }
+            rv[date].push({
+                'venue': elem[3],
+                'date': elem[0].replace(':', ''),
+                'details': elem[2],
+                'bands': [elem[1]]
             });
         }
     }
-
-    // lol "organized"
-    return organized;
+    // HX: Too many dates
+    // HX: Handle date spans
+    return rv;
 }
 
 
-// Compute the edit distance between the two given strings
+function get(url) {
+    // Return a new promise.
+    return new Promise(((resolve, reject) => {
+        const req = new XMLHttpRequest();
+        req.open('GET', url);
+        // HX: CORS
+
+        req.onload = () => {
+            if (req.status === 200) {
+                const csvData = Papa.parse(req.response).data;
+                const data = nineteenHzParse(csvData);
+                console.log('Request success.');
+                resolve(data);
+            } else {
+                const error = Error(req.statusText);
+                reject(error);
+            }
+        };
+
+        // Handle network errors
+        req.onerror = () => {
+            reject(Error('Network Error'));
+        };
+
+        req.send();
+    }));
+}
+
+
+/*
+MAPBOX
+======
+*/
+
+// defaults
+function ModifiedClusterGroup() {
+    return new L.MarkerClusterGroup({
+        spiderfyOnMaxZoom: true,
+        maxClusterRadius: 1,
+        spiderfyDistanceMultiplier: 3
+        /* custom icons ?
+            iconCreateFunction: function(cluster) {
+              return L.mapbox.marker.icon({
+                // show the number of markers in the cluster on the icon.
+                'marker-symbol': cluster.getChildCount(),
+                'marker-color': '#a0d6b4'
+              });
+            }
+            */
+    });
+}
+
+
+function setupMap() {
+    // Return a new promise
+    // HX: New promise necessary?
+    return new Promise(((resolve, reject) => {
+        // easy to change online though if we suspect abuse
+        // HX: Replace with own
+
+        // Init map
+        map = L.mapbox.map('map', 'mapbox.dark', {
+            maxZoom: 17
+        })
+            .setView([37.7600, -122.416], 13);
+
+        // Locate me button
+        L.control.locate().addTo(map);
+
+        if (map) {
+            console.log('Map is loaded.');
+            resolve();
+        } else {
+            const error = Error('Map is not loaded!');
+            reject(error);
+        }
+    }));
+}
+
+// filters
+function populateDates(data) {
+    // Grab form
+    const form = document.getElementById('date-selector');
+    const dates = Object.keys(data);
+
+    let tempHTML = '<div>';
+    for (let d = 0; d < dates.length; d += 1) {
+        const leRadio = `<input type='checkbox' name='filters' onclick='showShows();' value='${ dates[d] }' checked>${ dates[d] }`;
+        tempHTML += leRadio;
+    }
+    tempHTML += '</div>';
+    form.innerHTML = tempHTML;
+    filters = document.getElementById('date-selector').filters;
+}
+
+function showShows() {
+    selectedDatesList = [];
+    // first collect all of the checked boxes and create an array of strings
+    // If there's only one element in filters
+    if (filters.constructor.name === 'HTMLInputElement') {
+        if (filters.checked) selectedDatesList.push(filters.value);
+    } else {
+        for (const filter of filters) {
+            if (filter.checked) selectedDatesList.push(filter.value);
+        }
+    }
+    // Remove any previously-displayed marker groups
+    overlays.clearLayers();
+    // Create a new marker group
+    const clusterGroup = ModifiedClusterGroup().addTo(overlays);
+    // Add any markers that fit the filtered criteria to that group.
+    myLayer.eachLayer((layer) => {
+        if (selectedDatesList.indexOf(layer.feature.properties.date) !== -1) {
+            clusterGroup.addLayer(layer);
+        }
+    });
+
+    // Update coordinates box
+    window.onmove();
+}
+
+/*
+ * Compute the edit distance between the two given strings
+ *
+ * @param   (string) a
+ * @param   (string) b
+ * @returns (Number)
+ */
 function getEditDistance(a, b) {
     if (a.length === 0) return b.length;
     if (b.length === 0) return a.length;
 
-    var matrix = [];
+    const matrix = [];
 
     // increment along the first column of each row
-    var i;
-    for (i = 0; i <= b.length; i++) {
+    let i;
+    for (i = 0; i <= b.length; i += 1) {
         matrix[i] = [i];
     }
 
     // increment each column in the first row
-    var j;
-    for (j = 0; j <= a.length; j++) {
+    let j;
+    for (j = 0; j <= a.length; j += 1) {
         matrix[0][j] = j;
     }
 
     // Fill in the rest of the matrix
-    for (i = 1; i <= b.length; i++) {
-        for (j = 1; j <= a.length; j++) {
-            if (b.charAt(i - 1) == a.charAt(j - 1)) {
+    for (i = 1; i <= b.length; i += 1) {
+        for (j = 1; j <= a.length; j += 1) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
                 matrix[i][j] = matrix[i - 1][j - 1];
             } else {
-                matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, // substitution
-                    Math.min(matrix[i][j - 1] + 1, // insertion
-                        matrix[i - 1][j] + 1)); // deletion
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1, // substitution
+                    Math.min(
+                        matrix[i][j - 1] + 1, // insertion
+                        matrix[i - 1][j] + 1
+                    )
+                ); // deletion
             }
         }
     }
-
     return matrix[b.length][a.length];
-};
+}
 
 
 function geojsonify(data) {
     // this function returns a geojson object
 
-    var features = []
-    var dateKeys = Object.keys(data)
+    // format for valid geojson
+    const rv = {
+        'type': 'FeatureCollection',
+        'features': []
+    };
+
+    const dateKeys = Object.keys(data);
 
     // loop through dates
-    for (var i = 0; i < dateKeys.length; i++) {
-
+    for (let i = 0; i < dateKeys.length; i += 1) {
         // loop through shows
-        for (var j = 0; j < data[dateKeys[i]].length; j++) {
+        for (let j = 0; j < data[dateKeys[i]].length; j += 1) {
+            const showData = data[dateKeys[i]][j];
+            const venueList = Object.keys(lonlatDictionary);
 
-
-            var showData = data[dateKeys[i]][j];
-            var venueList = Object.keys(lonlatDictionary);
-
-            // check for misspellings
-            if (!lonlatDictionary[showData['venue']]) {
+            // Check for misspellings
+            if (!lonlatDictionary[showData.venue]) {
                 try {
-                    for (var v = 0; v < venueList.length; v++) {
-                        var misspelled = showData['venue'].replace(/\W/g, '')
-                        var spelledCorrect = venueList[v].replace(/\W/g, '')
-                        var editDistance = getEditDistance(misspelled, spelledCorrect);
+                    for (let v = 0; v < venueList.length; v += 1) {
+                        const misspelled = showData.venue.replace(/\W/g, '');
+                        const spelledCorrect = venueList[v].replace(/\W/g, '');
+                        const editDistance = getEditDistance(misspelled, spelledCorrect);
                         if (editDistance <= 3) {
-                            console.log('"' + showData['venue'] + '" has been replaced with "' + venueList[v] + '"');
-                            showData['venue'] = venueList[v];
+                            console.log(`"${ showData.venue }" has been replaced with "${ venueList[v] }"`);
+                            showData.venue = venueList[v];
                         }
                     }
                 } catch (e) {
-                    console.log('Missing Venue?', e);
+                    console.log('Missing venue?', e);
                 }
             }
 
-            var show = {
-                "type": "Feature",
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": lonlatDictionary[showData['venue']] || [-122.422960, 37.826524]
+            const show = {
+                'type': 'Feature',
+                'geometry': {
+                    'type': 'Point',
+                    'coordinates': lonlatDictionary[showData.venue] || [-122.422960, 37.826524]
                 },
-                "properties": {
-                    "date": dateKeys[i],
-                    "venue": showData['venue'],
-                    "bands": showData['bands'],
-                    "details": showData['details'].replace(/ ,/g, ''), // fucking commas
+                'properties': {
+                    'date': dateKeys[i],
+                    'venue': showData.venue,
+                    'bands': showData.bands,
+                    'details': showData.details.replace(/ ,/g, ''), // fucking commas
                     'marker-color': '#33CC33', //+Math.floor(Math.random()*16777215).toString(16), //random colors !
                     'marker-size': 'large',
                     'marker-symbol': 'music'
                 }
-            }
+            };
 
             // add show to features array
-            features.push(show)
-
+            rv.features.push(show);
         }
     }
 
-    // format for valid geojson
-    var geojson = {
-        "type": "FeatureCollection",
-        "features": features
-    }
-    return geojson
+    return rv;
 }
 
 
-
-function plotShows(json) {
-
-    return new Promise(function(resolve, reject) {
-
-
+function plotShows(data) {
+    // HX: Necessary?
+    return new Promise(((resolve, reject) => {
         // update function for coordinates infobox
         window.onmove = function onmove() {
             // Get the map bounds - the top-left and bottom-right locations.
-            var inBounds = [],
-                bounds = map.getBounds();
-            clusterGroup.eachLayer(function(marker) {
+            const inBounds = [];
+            const bounds = map.getBounds();
+            clusterGroup.eachLayer((marker) => {
                 // For each marker, consider whether it is currently visible by comparing
                 // with the current map bounds.
-                if (bounds.contains(marker.getLatLng()) && selectedDatesList.indexOf(marker.feature.properties.date) !== -1) {
-                    var feature = marker.feature;
-                    var coordsTemplate = L.mapbox.template('{{properties.date}} - {{properties.venue}} |{{#properties.bands}} {{.}} |{{/properties.bands}}{{properties.details}}', feature)
+                if (bounds.contains(marker.getLatLng()) &&
+                    selectedDatesList.indexOf(marker.feature.properties.date) !== -1) {
+                    const feature = marker.feature;
+                    const coordsTemplate = L.mapbox.template('{{properties.date}} - {{properties.venue}} |{{#properties.bands}} {{.}} |{{/properties.bands}}{{properties.details}}', feature);
                     inBounds.push(coordsTemplate);
                 }
             });
             // Display a list of markers.
-            inBounds.reverse()
+            inBounds.reverse();
             document.getElementById('coordinates').innerHTML = inBounds.join('\n');
-        }
+        };
 
 
         // get that geojson
-        geojson = geojsonify(organized);
+        const geojson = geojsonify(data);
 
         // attach data
-        myLayer = L.mapbox.featureLayer(geojson)
+        myLayer = L.mapbox.featureLayer(geojson);
 
         // make clustergroup
-        var clusterGroup = ModifiedClusterGroup();
+        const clusterGroup = ModifiedClusterGroup();
         // add features
         clusterGroup.addLayer(myLayer);
         overlays = L.layerGroup().addTo(map);
@@ -441,13 +399,12 @@ function plotShows(json) {
         showShows();
 
         // for each layer in feature layer
-        myLayer.eachLayer(function(e) {
-
-            var marker = e;
-            var feature = e.feature;
+        myLayer.eachLayer((e) => {
+            const marker = e;
+            const feature = e.feature;
 
             // Create custom popup content
-            var popupContent = L.mapbox.template('<h1> {{properties.venue}} </h1><br><h3> {{properties.date}} </h3><br><h2> {{#properties.bands}} - {{.}} <br> {{/properties.bands}} </h2><br><h2> {{properties.details}} </h2><br>', feature)
+            const popupContent = L.mapbox.template('<h1> {{properties.venue}} </h1><br><h3> {{properties.date}} </h3><br><h2> {{#properties.bands}} - {{.}} <br> {{/properties.bands}} </h2><br><h2> {{properties.details}} </h2><br>', feature);
 
             marker.bindPopup(popupContent, {
                 closeButton: true,
@@ -456,122 +413,84 @@ function plotShows(json) {
         });
 
 
-
-
-        map.on('move', onmove);
+        map.on('move', window.onmove);
         // call onmove off the bat so that the list is populated.
         // otherwise, there will be no markers listed until the map is moved.
         window.onmove();
 
 
         if (geojson) {
-            resolve(console.log('Shows plotted.'))
+            console.log('Shows plotted.');
+            resolve();
         } else {
-            reject(console.log(Error('Shows cannot be plotted.')));
+            reject(Error('Shows cannot be plotted.'));
         }
+    }));
+}
+
+
+/**
+ * Something about a vex modal
+ *
+ * Hexecute: This does some sort of UI setup. That's all I know.
+ */
+function modalPop() {
+    const modalMessage = $('#modal-template').html();
+    vex.defaultOptions.className = 'vex-theme-flat-attack';
+    $('#q').on('click hover', vex.dialog.alert(modalMessage));
+}
+
+
+/**
+ * CONTROL LOGIC
+ * =============
+ */
+// HX: Set up UI first in case network calls take time
+// HX: Async somehow
+modalPop();
+get(csvUrl).then((data) => {
+    try {
+        setupMap();
+    } catch (err) {
+        vex.dialog.alert('OH SHIT SOMETHINGS BROKEN. rawgit could be mad or my code could be broken.');
+    }
+    populateDates(data);
+    plotShows(data);
+});
+
+
+/* gmaps api */
+
+// Note: I don't think I want to use these because they were pretty inacurate
+// when using the venue descriptions
+// from foopee. But I'm going to leave them here in case they get used as a
+// catchall once the locations are all
+// added to the lonlat dictionary.
+
+
+// HX: Keep this?
+function fetchGeo(venue) {
+    return new Promise((resolve, reject) => {
+        // api key
+        // request
+        const geocoder = `https://maps.googleapis.com/maps/api/geocode/json?address=${ encodeURIComponent(venue) }&key=${ apiKey }`;
+
+        $.getJSON(geocoder, (response) => {
+            if (response) {
+                console.log('Looked up venue.');
+                resolve(response);
+            } else {
+                const error = Error('Venue lookup failure.');
+                reject(error);
+            }
+        });
     });
 }
 
 
-function toggleDate(desc) {
-    for (var i = 0; i < filters.length; i++) {
-
-        if (desc == 'today') {
-            var day = Date().slice(0, 10) // this gives us the foopee time format
-        } else if (desc == 'tomorrow') {
-            var d = new Date();
-            var day = new Date(((d.getTime() / 1000) + (60 * 60 * 24)) * 1000); // milliseconds not seconds
-            day = day.toString().slice(0, 10);
-        }
-
-        // lol, so foopee puts its date with no zero padding:
-        if (day) {
-            var day_list = day.split(' ');
-            day_list[2] = String(parseInt(day_list[2]));
-            day = day_list.join(' ');
-        }
-
-        if (filters[i].value == day) {
-            filters[i].checked = 1;
-        } else {
-            filters[i].checked = 0;
-        }
-
-        if (desc == 'all') {
-            filters[i].checked = 1
-        }
-    }
-
-    // update
-    showShows();
-
-}
-////////////////
-// vex modal //
-///////////////
-
-vex.defaultOptions.className = 'vex-theme-flat-attack';
-
-
-function modalPop() {
-    var modalMessage = $('#modal-template').html();
-    $('#q').on("click hover", vex.dialog.alert(modalMessage))
-}
-
-
-///////////////////
-// control logic /
-/////////////////
-
-get(yql_url).then(function(resolve) {
-    try {
-        setupMap();
-    } catch (err) {
-        vex.dialog.alert('OH SHIT SOMETHINGS BROKEN. The List could be down, rawgit could be mad, or my code could be broken.')
-    }
-    populateDates(organized);
-    plotShows(resp);
-    modalPop();
-})
-
-
-
-///////////////
-// gmaps api /
-/////////////
-
-// Note: I don't think I want to use these because they were pretty inacurate when using the venue descriptions
-// from foopee. But I'm going to leave them here in case they get used as a catchall once the locations are all
-// added to the lonlat dictionary.
-
-
-function fetchGeo(venue) {
-
-    return new Promise(function(resolve, reject) {
-
-        // api key
-        var apiKey = "AIzaSyDCyj1LQMqFPcQhgfW92vR8BtXhlDIvF-4";
-        // request
-        var geocoder = "https://maps.googleapis.com/maps/api/geocode/json?address=" + encodeURIComponent(venue) + "&key=" + apiKey;
-
-        //clear
-        geoResponse = '';
-
-        $.getJSON(geocoder, function(response) {
-
-            if (response) {
-                geoResponse = response;
-                resolve(console.log('Looked up venue.'))
-            } else {
-                reject(console.log(Error('Venue lookup failure.')));
-            }
-        })
-    })
-}
-
 function getLonLat(venue) {
-
-    fetchGeo(venue).then(function(resolve) {
-        geoResponse = [geoResponse.results[0].geometry.location.lng, geoResponse.results[0].geometry.location.lat]
-    })
+    fetchGeo(venue).then(
+        response => [response.results[0].geometry.location.lng,
+            response.results[0].geometry.location.lat]);
 }
+
