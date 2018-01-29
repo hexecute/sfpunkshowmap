@@ -1,0 +1,3 @@
+* De-duplicate locations.csv
+    * Small misspelling may cause a duplicate entry
+* Add logging for failure cases

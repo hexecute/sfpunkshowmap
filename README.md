@@ -1,9 +1,15 @@
-# SF Punk Show Map
+# SF Electronic Music Show Map
+
+INPROGRESS
 
 This is an attempt to:
 
  - scrape 19hz.info for shows (with frajen's permissions)
  - put those shows on a map
+
+# Acknowledgments
+
+[The original!](https://github.com/metasyn/sfpunkshowmap)
 
 ## License
 

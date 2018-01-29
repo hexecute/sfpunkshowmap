@@ -11,7 +11,8 @@
     "eslint-plugin-import": "^2.8.0"
   },
   "scripts": {
-    "lint": "./node_modules/eslint/bin/eslint.js mapper.js"
+    "lint": "./node_modules/eslint/bin/eslint.js ./js/mapper.js",
+    "server": "python -m SimpleHTTPServer"
   },
   "author": "Hexecute",
   "license": "ISC"
