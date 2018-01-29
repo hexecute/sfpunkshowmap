@@ -1,3 +1,5 @@
 *.DS_Store
+errors.log
 node_modules
 npm-debug.log
+secrets.py
