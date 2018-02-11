@@ -7,8 +7,10 @@ import time
 import urllib.request
 
 geocoder_url_base = "https://maps.googleapis.com/maps/api/geocode/json?"\
-                    "address=%s&key=%s"
-geocoder_url = geocoder_url_base % ("%s", secrets.api_key)
+                    "address=%s&bounds=%skey=%s"
+# Use a very loose definition of Bay Area to encompass all possible events
+bay_area_bounds = "35.813239,-123.627760|39.315658,-119.369631"
+geocoder_url = geocoder_url_base % ("%s", bay_area_bounds, secrets.api_key)
 
 # HX: If multiple locations found
 # HX: Err on ambiguity

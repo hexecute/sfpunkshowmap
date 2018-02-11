@@ -1,7 +1,4 @@
 /* GLOBAL */
-let apiKeyDict;
-// HX: Fix Alcatraz Island
-// HX: Rename "shows" -> "events"
 // HX: Restructuring
 let map;
 // HX: Rename
@@ -16,9 +13,9 @@ const lonlatDictionary = {};
 
 /* CONSTANTS */
 
-const csvUrl = 'https://cors.io/?https://19hz.info/events_BayArea.csv';
+// const csvUrl = 'https://cors.io/?https://19hz.info/events_BayArea.csv';
+const csvUrl = 'http://localhost:8000/csv/events_BayArea.csv';
 const locationsCSV = './csv/locations.csv';
-const apiKeys = './csv/api_keys.csv';
 
 /*
  * Convert 19hz.info CSV into the format used by sfpunkshowmap
@@ -40,10 +37,15 @@ function nineteenHzParse(arr) {
                 rv[date] = [];
             }
             rv[date].push({
-                'venue': elem[3],
                 'date': elem[0].replace(':', ''),
-                'details': elem[2],
-                'bands': [elem[1]]
+                'bands': [elem[1]],
+                'genres': elem[2],
+                'venue': elem[3],
+                'time': elem[4],
+                'cost': elem[5],
+                'ages': elem[6],
+                'organizers': elem[7],
+                'links': [elem[8], elem[9]],
             });
         }
     }
@@ -143,7 +145,7 @@ function populateDates(data) {
 
     let tempHTML = '<div>';
     for (let d = 0; d < dates.length; d += 1) {
-        const leRadio = `<input type='checkbox' name='filters' onclick='showShows();' value='${ dates[d] }' checked>${ dates[d] }`;
+        const leRadio = `<input type='checkbox' name='filters' onclick='showEvents();' value='${ dates[d] }' checked>${ dates[d] }`;
         tempHTML += leRadio;
     }
     tempHTML += '</div>';
@@ -151,7 +153,43 @@ function populateDates(data) {
     filters = document.getElementById('date-selector').filters;
 }
 
-function showShows() {
+function toggleDate(dates) {
+    let targetDay;
+    switch(dates) {
+        case 'today':
+            targetDay = Date().slice(0, 10);
+            break;
+        case 'tomorrow':
+            targetDay = new Date(new Date().getTime() + 60 * 60 * 24 * 1000);
+            targetDay = targetDay.toDateString().slice(0, 10);
+            break;
+        case 'none':
+            targetDay = '';
+        case 'all':
+            break;
+        default:
+            console.log('toggleDate received an erroneous input.', dates);
+            return;
+    }
+    for (let i = 0; i < filters.length; i += 1) {
+        switch(dates) {
+            case 'today':
+            case 'yesterday':
+            case 'none':
+                if (filters[i].value == targetDay) {
+                    filters[i].checked = 1;
+                } else {
+                    filters[i].checked = 0;
+                }
+                break;
+            case 'all':
+                filters[i].checked = 1;
+        }
+    }
+    showEvents();
+}
+
+function showEvents() {
     selectedDatesList = [];
     // first collect all of the checked boxes and create an array of strings
     // If there's only one element in filters
@@ -192,7 +230,7 @@ function geojsonify(data) {
 
     // loop through dates
     for (let i = 0; i < dateKeys.length; i += 1) {
-        // loop through shows
+        // loop through events
         for (let j = 0; j < data[dateKeys[i]].length; j += 1) {
             const eventData = data[dateKeys[i]][j];
             const venueList = Object.keys(lonlatDictionary);
@@ -209,19 +247,41 @@ function geojsonify(data) {
                     console.log('Missing venue?', eventData, e);
                 }
             }
-            // Where is the show at?
+            // Does the event have coordinates?
             if (!lonlatDictionary[eventData.venue]) {
-                getLonLat(eventData.venue);
+                console.log('Couldn\'t find coordinates for:',
+                            eventData.venue);
+                continue;
+            // Dummy coordinates used are 0, 0
+            } else if (lonlatDictionary[eventData.venue][0] == "0" &&
+                 lonlatDictionary[eventData.venue][1] == "0") {
+                console.log('Found dummy coordinates for:',
+                            eventData.venue);
+                continue;
+            // TBA: "To Be Announced"
+            } else if (eventData.venue.search("TBA") != -1) {
+                continue;
             }
-            eventData.coordinates = lonlatDictionary[eventData.venue] || [-122.422960, 37.826524];
 
-            // Random color!
-            // HX: Color should imply something
-            // HX: Color implies location confidence
-            const randomHex = Math.floor(Math.random() * 16777216).toString(16).padStart(6, '0');
-            // HX: Fucking commas?
-            // HX: Coordinates to 0,0 in fail case
-            const show = {
+
+            eventData.coordinates = lonlatDictionary[eventData.venue];
+
+            // HX: Add documentation for colors
+            let hexColor;
+            switch (eventData.ages) {
+                case '21+':
+                    hexColor = 'ff0000';
+                    break;
+                case '18+':
+                    hexColor = 'ffff00';
+                    break;
+                case 'All ages':
+                    hexColor = '00ff00';
+                    break;
+                default:
+                    hexColor = 'ffffff';
+            }
+            let event = {
                 'type': 'Feature',
                 'geometry': {
                     'type': 'Point',
@@ -231,15 +291,24 @@ function geojsonify(data) {
                     'date': dateKeys[i],
                     'venue': eventData.venue,
                     'bands': eventData.bands,
-                    'details': eventData.details.replace(/ ,/g, ''), // fucking commas
-                    'marker-color': `#${ randomHex }`,
+                    'genres': eventData.genres,
+                    'ages': eventData.ages,
+                    'marker-color': `#${hexColor}`,
                     'marker-size': 'large',
                     'marker-symbol': 'music'
                 }
             };
+            if (eventData.links) {
+                event.properties['link_0'] = eventData.links[0];
+                event.properties['link_1'] = eventData.links[1];
+            } else {
+                event.properties['link_0'] = '';
+                event.properties['link_1'] = '';
+            }
 
-            // add show to features array
-            rv.features.push(show);
+
+            // add event to features array
+            rv.features.push(event);
         }
     }
 
@@ -284,8 +353,8 @@ function plotShows(data) {
         overlays = L.layerGroup().addTo(map);
         // add cluster layer
         // overlays are multiple layers
-        // add in showShows()
-        showShows();
+        // add in showEvents()
+        showEvents();
 
         // for each layer in feature layer
         myLayer.eachLayer((e) => {
@@ -293,7 +362,14 @@ function plotShows(data) {
             const feature = e.feature;
 
             // Create custom popup content
-            const popupContent = L.mapbox.template('<h1> {{properties.venue}} </h1><br><h3> {{properties.date}} </h3><br><h2> {{#properties.bands}} - {{.}} <br> {{/properties.bands}} </h2><br><h2> {{properties.details}} </h2><br>', feature);
+            // HX: Remove excess links if they don't exist
+            const popupContent = L.mapbox.template(
+                '<h1>Venue: {{properties.venue}}</h1><br>\
+                 <h3>Dates: {{properties.date}}</h3><br>\
+                 <h2>Bands: {{properties.bands}}</h2><br>\
+                 <h2><a href={{properties.link_0}}>Event link</a></h2><br>\
+                 <h2><a href={{properties.link_1}}>Facebook link</a></h2><br>\
+                 <h2>Genres: {{properties.genres}}</h2><br>', feature);
 
             marker.bindPopup(popupContent, {
                 closeButton: true,
@@ -344,9 +420,6 @@ loadCSV(locationsCSV).then((csvData) => {
         const row = csvData[i];
         lonlatDictionary[row[0]] = [row[1], row[2]];
     }
-});
-loadCSV(apiKeys).then((apiKeyData) => {
-    apiKeyDict = apiKeyData[0][1];
 });
 
 loadCSV(csvUrl).then((csvData) => {
