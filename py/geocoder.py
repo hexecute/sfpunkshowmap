@@ -13,10 +13,10 @@ geocoder_url = geocoder_url_base % ("%s", secrets.api_key)
 # HX: If multiple locations found
 # HX: Err on ambiguity
 # HX: Location box
+# HX: Response code != 200
 
 def get_lon_lat(location):
     # Sleep to avoid rate-limiting
-    raise Exception("WER")
     time.sleep(1)
     resp = urllib.request.urlopen(geocoder_url % (location.replace(" ", "+")))
     resp_json = json.loads(resp.read().decode("utf-8"))
